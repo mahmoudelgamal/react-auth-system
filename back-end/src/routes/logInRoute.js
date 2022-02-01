@@ -1,6 +1,11 @@
-import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-
+import { 
+  AuthenticationDetails,
+  CognitoUserPool,
+  CognitoUserAttribute,
+  CognitoUser,
+ } from 'amazon-cognito-identity-js';
+ import { awsUserPool } from '../utils/awsUserPool';
 import {getDbConnection} from "../db";
 export const logInRoute = {
   path: '/api/logIn',
@@ -8,35 +13,43 @@ export const logInRoute = {
   handler: async (req, res) => {
       const { email, password} = req.body;
 
-      const db = getDbConnection('react-auth-db');
-      const user = await db.collection('users').findOne({email});
-      if (!user) {
-        res.sendStatus(401);
-      }
-      const {_id:id, isVerified, info, hashedPassword} = user;
+      new CognitoUser({
+        Username: email,
+        Pool: awsUserPool,
+      }).authenticateUser(new AuthenticationDetails({
+        Username: email,
+        Password: password,
+      }), {
+        onSuccess: async (result) => {
+          const db = getDbConnection('react-auth-db');
+          const user = await db.collection('users').findOne({email});
 
-      const isCorrect = await bcrypt.compare(password, hashedPassword);
-      if (isCorrect) {
-        jwt.sign({
-          id,
-          email,
-          info,
-          isVerified,
-        },
-        process.env.JWT_SECRET,
-        {
-          expiresIn: '2d',
-        },
-        (err, token) => {
-          if (err) {
-            res.status(500).send(err);
+          const {_id:id, isVerified, info} = user;
+          jwt.sign({
+            id,
+            email,
+            info,
+            isVerified,
+          },
+          process.env.JWT_SECRET,
+          {
+            expiresIn: '2d',
+          },
+          (err, token) => {
+            if (err) {
+              res.sendStatus(500)
+            }
+            res.status(200).send({token});
           }
-          res.status(200).send({token});
-        }
-        )
-      } else {
-        res.sendStatus(401);
+          )
+  
+        },
+        onFailure: (err) => {
+          res.sendStatus(401);
+        },
       }
+      );
+
       
 
   },

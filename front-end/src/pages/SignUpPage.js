@@ -16,7 +16,7 @@ export const SignUpPage = () => {
       password,
     });
       setToken(response.data.token);
-      history.push("/please-verify");
+      history.push(`/please-verify?email=${encodeURIComponent(email)}`);
   };
   return (
     <div className="content-container">
